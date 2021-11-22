@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"inter/ast"
 	"inter/lexer"
 	"inter/token"
@@ -100,4 +101,121 @@ return 999;
 			t.Errorf("Statement token is expected to be RETURN, got %s", rSt.Token.Type)
 		}
 	}
+}
+
+func TestIdentifierExpression(t *testing.T) {
+	program := parse("foobar;", 1, t)
+
+	st, ok := program.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("Expected ExpressionStatement, got %T", program.Statements[0])
+	}
+
+	id, ok := st.Expression.(*ast.Identifier)
+	if !ok {
+		t.Fatalf("Expected Identifier, got %T", st.Expression)
+	}
+	if id.Value != "foobar" {
+		t.Fatalf("Expected \"foobar\", got %v", id.Value)
+	}
+}
+
+func TestIntegerLiteral(t *testing.T) {
+	program := parse("5;", 1, t)
+
+	st, ok := program.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("Expected ExpressionStatement, got %T", program.Statements[0])
+	}
+
+	id, ok := st.Expression.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("Expected IntegerLiteral, got %T", st.Expression)
+	}
+	if id.Value != 5 {
+		t.Fatalf("Expected 5, got %d", id.Value)
+	}
+}
+
+func TestPrefixExpression(t *testing.T) {
+	tests := []struct {
+		input    string
+		operator string
+		value    int64
+	}{
+		{"!5;", "!", 5},
+		{"-15;", "-", 15},
+	}
+
+	for _, test := range tests {
+		program := parse(test.input, 1, t)
+		st, ok := program.Statements[0].(*ast.ExpressionStatement)
+		if !ok {
+			t.Fatalf("Expected ExpressionStatement, got %T", program.Statements[0])
+		}
+
+		prefix, ok := st.Expression.(*ast.PrefixExpression)
+		if !ok {
+			t.Fatalf("Expected PrefixExpression, got %T", st.Expression)
+		}
+
+		if prefix.Operator != test.operator {
+			t.Fatalf("Expected Operator %s, got %s", test.operator, prefix.Operator)
+		}
+
+		if !testIntegerLiteral(t, prefix.Right, test.value) {
+			return
+		}
+	}
+}
+
+func testIntegerLiteral(t *testing.T, il ast.Expression, value int64) bool {
+	integ, ok := il.(*ast.IntegerLiteral)
+	if !ok {
+		t.Errorf("il not *ast.IntegerLiteral. got=%T", il)
+		return false
+	}
+
+	if integ.Value != value {
+		t.Errorf("integ.Value not %d. got=%d", value, integ.Value)
+		return false
+	}
+
+	if integ.TokenLiteral() != fmt.Sprintf("%d", value) {
+		t.Errorf("integ.TokenLiteral not %d. got=%s", value,
+			integ.TokenLiteral())
+		return false
+	}
+
+	return true
+}
+
+func parse(input string, expectedSt int, t *testing.T) *ast.Program {
+	l := lexer.New(input)
+	parser := New(l)
+	program := parser.ParseProgram()
+	checkParserErrors(t, parser)
+
+	if program == nil {
+		t.Fatalf("Failed to parse")
+	}
+
+	if len(program.Statements) != expectedSt {
+		t.Fatalf("Expected %d statements, got %d", expectedSt, len(program.Statements))
+	}
+
+	return program
+}
+
+func checkParserErrors(t *testing.T, p *Parser) {
+	errors := p.errors
+	if len(errors) == 0 {
+		return
+	}
+
+	t.Errorf("parser has %d errors", len(errors))
+	for _, msg := range errors {
+		t.Errorf("parser error: %q", msg)
+	}
+	t.FailNow()
 }

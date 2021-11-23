@@ -169,6 +169,42 @@ func TestPrefixExpression(t *testing.T) {
 	}
 }
 
+func TestInfixExpression(t *testing.T) {
+	tests := []struct {
+		input    string
+		left     int
+		operator string
+		right    int
+	}{
+		{"5 + 5;", 5, "+", 5},
+		{"5 - 5;", 5, "-", 5},
+		{"5 * 5;", 5, "*", 5},
+		{"5 / 5;", 5, "/", 5},
+		{"5 > 5;", 5, ">", 5},
+		{"5 < 5;", 5, "<", 5},
+		{"5 == 5;", 5, "==", 5},
+		{"5 != 5;", 5, "!=", 5},
+	}
+
+	for _, test := range tests {
+		program := parse(test.input, 1, t)
+		st, ok := program.Statements[0].(*ast.ExpressionStatement)
+		if !ok {
+			t.Fatalf("Not ExpressionStatement, but %T", program.Statements[0])
+		}
+
+		exp, ok := st.Expression.(*ast.InfixExpression)
+		if !ok {
+			t.Fatalf("Not InfixExpression, but %T", st.Expression)
+		}
+
+		if exp.Operator != test.operator {
+			t.Fatalf("Operator expected to be %s, got %s", test.operator, exp.Operator)
+		}
+	}
+
+}
+
 func testIntegerLiteral(t *testing.T, il ast.Expression, value int64) bool {
 	integ, ok := il.(*ast.IntegerLiteral)
 	if !ok {

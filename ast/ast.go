@@ -2,7 +2,9 @@ package ast
 
 import (
 	"bytes"
+	"fmt"
 	"inter/token"
+	"strings"
 )
 
 type Node interface {
@@ -124,3 +126,20 @@ type PrefixExpression struct {
 func (p *PrefixExpression) expressionNode()      {}
 func (p *PrefixExpression) TokenLiteral() string { return p.Token.Literal }
 func (p *PrefixExpression) String() string       { return "(" + p.Operator + p.Right.String() + ")" }
+
+type InfixExpression struct {
+	Token    token.Token
+	Left     Expression
+	Operator string
+	Right    Expression
+}
+
+func (p *InfixExpression) expressionNode()      {}
+func (p *InfixExpression) TokenLiteral() string { return p.Token.Literal }
+func (p *InfixExpression) String() string {
+	var builder strings.Builder
+	builder.WriteString("(" + p.Left.String())
+	builder.WriteString(fmt.Sprintf(" %s ", p.Operator))
+	builder.WriteString(p.Right.String() + ")")
+	return builder.String()
+}

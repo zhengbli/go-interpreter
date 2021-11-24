@@ -57,6 +57,9 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.INT, p.parseIntegerIdentifier)
 	p.registerPrefix(token.MINUS, p.parsePrefixExpression)
 	p.registerPrefix(token.BANG, p.parsePrefixExpression)
+	p.registerPrefix(token.TRUE, p.parseBooleanLiteral)
+	p.registerPrefix(token.FALSE, p.parseBooleanLiteral)
+	p.registerPrefix(token.LPAREN, p.parseGroupedExpression)
 
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
 	p.registerInfix(token.MINUS, p.parseInfixExpression)
@@ -190,6 +193,8 @@ func (p *Parser) peekError(t token.TokenType) {
 }
 
 func (p *Parser) parseExpression(precedence int) ast.Expression {
+	defer untrace(trace("parseExpression"))
+
 	prefixFn := p.prefixParseFns[p.curToken.Type]
 
 	if prefixFn == nil {
@@ -244,7 +249,26 @@ func (p *Parser) parsePrefixExpression() ast.Expression {
 	return exp
 }
 
+func (p *Parser) parseBooleanLiteral() ast.Expression {
+	exp := &ast.BooleanLiteral{Token: p.curToken, Value: p.tokenIs(token.TRUE)}
+	return exp
+}
+
+func (p *Parser) parseGroupedExpression() ast.Expression {
+	p.nextToken()
+
+	exp := p.parseExpression(LOWEST)
+	if !p.peekTokenIs(token.RPAREN) {
+		p.errors = append(p.errors, "Unmatched left ( found")
+		return nil
+	}
+	p.nextToken()
+	return exp
+}
+
 func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
+	defer untrace(trace("parseInfixExpression"))
+
 	exp := &ast.InfixExpression{
 		Token:    p.curToken,
 		Operator: p.curToken.Literal,

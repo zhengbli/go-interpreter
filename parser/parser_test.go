@@ -342,6 +342,21 @@ func TestIfExpression(t *testing.T) {
 	}
 }
 
+func TestFuncLiteral(t *testing.T) {
+	input := "fn(x, y) { return x + y; }"
+	program := parse(input, 1, t)
+	st := program.Statements[0].(*ast.ExpressionStatement)
+	fn := st.Expression.(*ast.FunctionLiteral)
+	if len(fn.FunctionParameters) != 2 {
+		t.Fatalf("Wrong number of function parameters")
+	}
+
+	returnSt, ok := fn.FunctionBody.Statements[0].(*ast.ReturnStatement)
+	if !ok {
+		t.Fatalf("Expect return statement, got %T", returnSt)
+	}
+}
+
 func TestOperatorPrecedenceParsing(t *testing.T) {
 	tests := []struct {
 		input    string

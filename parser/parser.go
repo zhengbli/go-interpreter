@@ -28,6 +28,7 @@ var precedences = map[token.TokenType]int{
 	token.MINUS:    SUM,
 	token.SLASH:    PRODUCT,
 	token.ASTERISK: PRODUCT,
+	token.LPAREN:   CALL,
 }
 
 type (
@@ -71,10 +72,15 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerInfix(token.EQ, p.parseInfixExpression)
 	p.registerInfix(token.LT, p.parseInfixExpression)
 	p.registerInfix(token.GT, p.parseInfixExpression)
+	p.registerInfix(token.LPAREN, p.parseCallExpression)
 
 	p.nextToken()
 	p.nextToken()
 	return p
+}
+
+func (p *Parser) Errors() []string {
+	return p.errors
 }
 
 func (p *Parser) registerPrefix(tType token.TokenType, fn prefixParseFn) {
@@ -106,12 +112,9 @@ func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
 
 	p.nextToken()
 
-	// TODO: handle the value exp later
-	for !p.curTokenIs(token.SEMICOLON) {
-		p.nextToken()
-	}
-
 	// To skip the semicolon
+	st.ReturnValue = p.parseExpression(LOWEST)
+
 	if p.peekTokenIs(token.SEMICOLON) {
 		p.nextToken()
 	}
@@ -132,10 +135,10 @@ func (p *Parser) parseLetStatement() *ast.LetStatement {
 		return nil
 	}
 
-	// TODO: Skip for now
-	for !p.peekTokenIs(token.SEMICOLON) {
-		p.nextToken()
-	}
+	p.nextToken()
+
+	// To skip the semicolon
+	st.Value = p.parseExpression(LOWEST)
 
 	// To skip the semicolon
 	if p.peekTokenIs(token.SEMICOLON) {
@@ -181,7 +184,9 @@ func (p *Parser) ParseProgram() *ast.Program {
 
 	for p.curToken.Type != token.EOF {
 		st := p.parseStatement()
-		program.Statements = append(program.Statements, st)
+		if st != nil {
+			program.Statements = append(program.Statements, st)
+		}
 
 		p.nextToken()
 	}
@@ -356,8 +361,38 @@ func (p *Parser) parseGroupedExpression() ast.Expression {
 	return exp
 }
 
+func (p *Parser) parseCallExpression(fn ast.Expression) ast.Expression {
+	exp := &ast.CallExpression{Token: p.curToken, Function: fn}
+	exp.Arguments = p.parseCallArguments()
+	return exp
+}
+
+func (p *Parser) parseCallArguments() []ast.Expression {
+	args := []ast.Expression{}
+	if p.peekTokenIs(token.RPAREN) {
+		p.nextToken()
+		return args
+	}
+
+	p.nextToken()
+	arg := p.parseExpression(LOWEST)
+	args = append(args, arg)
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken()
+		p.nextToken()
+		arg := p.parseExpression(LOWEST)
+		args = append(args, arg)
+	}
+
+	if !p.peekTokenIsThenAdvance(token.RPAREN) {
+		return nil
+	}
+
+	return args
+}
+
 func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
-	defer untrace(trace("parseInfixExpression"))
+	// defer untrace(trace("parseInfixExpression"))
 
 	exp := &ast.InfixExpression{
 		Token:    p.curToken,

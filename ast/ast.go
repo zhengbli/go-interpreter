@@ -204,12 +204,39 @@ func (fl *FunctionLiteral) TokenLiteral() string { return fl.Token.Literal }
 func (fl *FunctionLiteral) String() string {
 	var buf strings.Builder
 	buf.WriteString("fn(")
+
+	params := []string{}
 	for _, p := range fl.FunctionParameters {
-		buf.WriteString(p.TokenLiteral())
-		buf.WriteString(", ")
+		params = append(params, p.TokenLiteral())
 	}
+	buf.WriteString(strings.Join(params, ", "))
+
 	buf.WriteString(") {")
 	buf.WriteString(fl.FunctionBody.String())
 	buf.WriteString("}")
+	return buf.String()
+}
+
+type CallExpression struct {
+	Token     token.Token
+	Function  Expression // function expression or function name (identifier)
+	Arguments []Expression
+}
+
+func (ce *CallExpression) expressionNode()      {}
+func (ce *CallExpression) TokenLiteral() string { return ce.Token.Literal }
+func (ce *CallExpression) String() string {
+	var buf strings.Builder
+	buf.WriteString(ce.Function.String())
+	buf.WriteString("(")
+	args := []string{}
+
+	for _, arg := range ce.Arguments {
+		args = append(args, arg.String())
+	}
+
+	buf.WriteString(strings.Join(args, ", "))
+	buf.WriteString(")")
+
 	return buf.String()
 }

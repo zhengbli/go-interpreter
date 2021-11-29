@@ -313,6 +313,35 @@ func checkParserErrors(t *testing.T, p *Parser) {
 	t.FailNow()
 }
 
+func TestIfExpression(t *testing.T) {
+	input := `if (x < y) { x } else { y }`
+	program := parse(input, 1, t)
+	st, ok := program.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("Not Expression statement")
+	}
+
+	ifs, ok := st.Expression.(*ast.IfExpression)
+	if !ok {
+		t.Fatalf("Not If Expression")
+	}
+
+	condExp := ifs.Condition.(*ast.InfixExpression)
+	if condExp.Operator != "<" {
+		t.Fatalf("If condition operator is incorrect")
+	}
+
+	ifBody := ifs.Body.Statements[0].TokenLiteral()
+	if ifBody != "x" {
+		t.Fatalf("If body is incorrect")
+	}
+
+	elseBody := ifs.ElseBody.Statements[0].TokenLiteral()
+	if elseBody != "y" {
+		t.Fatalf("Else body is incorrect")
+	}
+}
+
 func TestOperatorPrecedenceParsing(t *testing.T) {
 	tests := []struct {
 		input    string

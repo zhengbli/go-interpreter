@@ -220,7 +220,8 @@ func (p *Parser) parseIfExpression() ast.Expression {
 
 	ifExp.Body = p.parseBlockStatements()
 
-	if p.peekTokenIsThenAdvance(token.ELSE) {
+	if p.peekTokenIs(token.ELSE) {
+		p.nextToken()
 		if !p.peekTokenIsThenAdvance(token.LBRACE) {
 			return nil
 		}

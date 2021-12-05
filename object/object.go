@@ -1,6 +1,11 @@
 package object
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+	"inter/ast"
+	"strings"
+)
 
 const (
 	INTEGER_OBJ     = "INTEGER"
@@ -8,6 +13,7 @@ const (
 	NULL_OBJ        = "NULL"
 	RETURNVALUE_OBJ = "RETURNVALUE"
 	ERROR_OBJ       = "ERROR"
+	FUNCTION_OBJ    = "FUNCTION"
 )
 
 type ObjectType string
@@ -50,3 +56,28 @@ type Error struct {
 
 func (e *Error) Type() ObjectType { return ERROR_OBJ }
 func (e *Error) Inspect() string  { return e.Message }
+
+type Function struct {
+	Parameters []*ast.Identifier
+	Body       *ast.BlockStatement
+	Env        *Environment
+}
+
+func (fn *Function) Type() ObjectType { return FUNCTION_OBJ }
+func (f *Function) Inspect() string {
+	var out bytes.Buffer
+
+	params := []string{}
+	for _, p := range f.Parameters {
+		params = append(params, p.String())
+	}
+
+	out.WriteString("fn")
+	out.WriteString("(")
+	out.WriteString(strings.Join(params, ", "))
+	out.WriteString(") {\n")
+	out.WriteString(f.Body.String())
+	out.WriteString("\n}")
+
+	return out.String()
+}

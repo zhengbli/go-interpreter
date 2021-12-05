@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"inter/evaluator"
 	"inter/lexer"
+	"inter/object"
 	"inter/parser"
 	"io"
 )
@@ -29,7 +30,8 @@ func Start(in io.Reader, out io.Writer) {
 			continue
 		}
 
-		evaled := evaluator.Eval(program)
+		env := object.NewEnvironment()
+		evaled := evaluator.Eval(program, env)
 		if evaled != nil {
 			io.WriteString(out, "Result: "+evaled.Inspect()+"\n")
 		}

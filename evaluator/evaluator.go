@@ -1,6 +1,7 @@
 package evaluator
 
 import (
+	"fmt"
 	"inter/ast"
 	"inter/object"
 )
@@ -11,43 +12,93 @@ var (
 	FALSE = &object.Boolean{Value: false}
 )
 
-func Eval(node ast.Node) object.Object {
+func isError(obj object.Object) bool {
+	return obj != nil && obj.Type() == object.ERROR_OBJ
+}
+
+func Eval(node ast.Node, env *object.Environment) object.Object {
 	switch x := node.(type) {
 	case *ast.Program:
-		return evalStatements(x.Statements)
+		return evalProgram(x, env)
+
 	case *ast.PrefixExpression:
-		right := Eval(x.Right)
+		right := Eval(x.Right, env)
+		if isError(right) {
+			return right
+		}
 		return evalPrefixExpression(x.Operator, right)
+
 	case *ast.InfixExpression:
-		left := Eval(x.Left)
-		right := Eval(x.Right)
+		left := Eval(x.Left, env)
+		if isError(left) {
+			return left
+		}
+		right := Eval(x.Right, env)
+		if isError(right) {
+			return right
+		}
 		return evalInfixExpression(x.Operator, left, right)
+
 	case *ast.ExpressionStatement:
-		return Eval(x.Expression)
+		return Eval(x.Expression, env)
+
 	case *ast.IntegerLiteral:
 		return &object.Integer{Value: x.Value}
+
 	case *ast.BooleanLiteral:
 		if x.Value {
 			return TRUE
 		}
 		return FALSE
+
 	case *ast.IfExpression:
-		cond := Eval(x.Condition)
-		return evalIfExpression(cond, x.Body, x.ElseBody)
+		cond := Eval(x.Condition, env)
+		if isError(cond) {
+			return cond
+		}
+		return evalIfExpression(cond, x.Body, x.ElseBody, env)
+
 	case *ast.BlockStatement:
-		return evalStatements(x.Statements)
+		return evalBlockStatements(x, env)
+
+	case *ast.ReturnStatement:
+		val := Eval(x.ReturnValue, env)
+		if isError(val) {
+			return val
+		}
+		return &object.ReturnValue{Value: val}
+
+	case *ast.LetStatement:
+		val := Eval(x.Value, env)
+		if isError(val) {
+			return val
+		}
+		env.Set(x.Name.Value, val)
+		return val
+
+	case *ast.Identifier:
+		return evalIdentifier(x, env)
 	}
 
 	return nil
 }
 
-func evalIfExpression(cond object.Object, body *ast.BlockStatement, elseBody *ast.BlockStatement) object.Object {
+func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object {
+	val, ok := env.Get(node.Value)
+	if !ok {
+		return newError("identifier not found: " + node.Value)
+	}
+
+	return val
+}
+
+func evalIfExpression(cond object.Object, body *ast.BlockStatement, elseBody *ast.BlockStatement, env *object.Environment) object.Object {
 	if isTruthy(cond) {
-		return Eval(body)
+		return Eval(body, env)
 	}
 
 	if elseBody != nil {
-		return Eval(elseBody)
+		return Eval(elseBody, env)
 	}
 
 	return NULL
@@ -73,7 +124,7 @@ func evalInfixExpressionForBooleans(operator string, left *object.Boolean, right
 	case "!=":
 		return getBool(left.Value != right.Value)
 	default:
-		return NULL
+		return newError("unknown operator: %s %s %s", left.Type(), operator, right.Type())
 	}
 }
 
@@ -88,7 +139,7 @@ func evalInfixExpressionForInteger(operator string, left *object.Integer, right 
 		return &object.Integer{Value: leftVal - rightVal}
 	case "*":
 		return &object.Integer{Value: leftVal * rightVal}
-	case "\\":
+	case "/":
 		return &object.Integer{Value: leftVal / rightVal}
 	case "==":
 		return getBool(left.Value == right.Value)
@@ -99,7 +150,7 @@ func evalInfixExpressionForInteger(operator string, left *object.Integer, right 
 	case "<":
 		return getBool(leftVal < rightVal)
 	default:
-		return NULL
+		return newError("unknown operator: %s %s %s", left.Type(), operator, right.Type())
 	}
 }
 
@@ -112,7 +163,11 @@ func evalInfixExpression(operator string, left object.Object, right object.Objec
 		return evalInfixExpressionForBooleans(operator, left.(*object.Boolean), right.(*object.Boolean))
 	}
 
-	return NULL
+	if left.Type() != right.Type() {
+		return newError("type mismatch: %s %s %s", left.Type(), operator, right.Type())
+	}
+
+	return newError("unknown operator: %s %s %s", left.Type(), operator, right.Type())
 }
 
 func getBool(val bool) *object.Boolean {
@@ -129,13 +184,13 @@ func evalPrefixExpression(operator string, right object.Object) object.Object {
 	case "-":
 		return evalMinusOperator(right)
 	default:
-		return NULL
+		return newError("unknown operator: %s%s", operator, right.Type())
 	}
 }
 
 func evalMinusOperator(right object.Object) object.Object {
 	if right.Type() != object.INTEGER_OBJ {
-		return NULL
+		return newError("unknown operator: -%s", right.Type())
 	}
 
 	val := right.(*object.Integer).Value
@@ -155,12 +210,41 @@ func evalBangOperator(right object.Object) object.Object {
 	}
 }
 
-func evalStatements(sts []ast.Statement) object.Object {
+func evalBlockStatements(bs *ast.BlockStatement, env *object.Environment) object.Object {
 	var res object.Object
 
-	for _, st := range sts {
-		res = Eval(st)
+	for _, st := range bs.Statements {
+		res = Eval(st, env)
+		if res.Type() == object.RETURNVALUE_OBJ {
+			return res
+		}
+
+		if isError(res) {
+			return res
+		}
 	}
 
 	return res
+}
+
+func evalProgram(prog *ast.Program, env *object.Environment) object.Object {
+	var res object.Object
+
+	for _, st := range prog.Statements {
+		res = Eval(st, env)
+		if res.Type() == object.RETURNVALUE_OBJ {
+			returnVal := res.(*object.ReturnValue)
+			return returnVal.Value
+		}
+
+		if isError(res) {
+			return res
+		}
+	}
+
+	return res
+}
+
+func newError(fmtStr string, args ...interface{}) *object.Error {
+	return &object.Error{Message: fmt.Sprintf(fmtStr, args...)}
 }
